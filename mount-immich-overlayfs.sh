@@ -9,6 +9,8 @@ OVERLAYFS_UPPER="/srv/dev-disk-by-id-ata-KIOXIA-EXCERIA_SATA_SSD_93RB70X8K0Z5/im
 OVERLAYFS_MERGED="/srv/dev-disk-by-id-ata-KIOXIA-EXCERIA_SATA_SSD_93RB70X8K0Z5/immich_lib_merged"
 OVERLAYFS_WORK="/srv/dev-disk-by-id-ata-KIOXIA-EXCERIA_SATA_SSD_93RB70X8K0Z5/immich_lib_worker"
 
+# /srv/dev-disk-by-id-ata-KIOXIA-EXCERIA_SATA_SSD_93RB70X8K0Z5/docker/ComposeFile/immich
+
 function chk_master_nas_nfs_mount() {
     echo "Check if master nas path is mounted"
     local cnt=0
@@ -24,7 +26,7 @@ function chk_master_nas_nfs_mount() {
     return 1
 }
 
-function compose_up_immich_container () {
+function compose_up_immich_container() {
     local cnt=0
     while ((cnt <= 10)); do
         if ! docker ps | grep ${DOCKER_CONTAINER_IMMICH_NAME}; then
@@ -32,15 +34,15 @@ function compose_up_immich_container () {
             docker compose -f ${DOCKER_CONTAINER_YML_FILE} up -d
         else
             echo "immich container is running"
-            return 0            
+            return 0
         fi
         ((cnt++)) || true
-        sleep 10s;
+        sleep 10s
     done
     return 1
 }
 
-function compose_down_immich_container () {
+function compose_down_immich_container() {
     local cnt=0
     while ((cnt <= 10)); do
         if docker ps | grep ${DOCKER_CONTAINER_IMMICH_NAME}; then
@@ -48,15 +50,13 @@ function compose_down_immich_container () {
             docker compose -f ${DOCKER_CONTAINER_YML_FILE} down
         else
             echo "immich container is not running"
-            return 0            
+            return 0
         fi
         ((cnt++)) || true
-        sleep 10s;
+        sleep 10s
     done
     return 1
 }
-
-
 
 function mount_and_start_immich_overlayfs() {
     echo "Start mount immich overlayfs"
@@ -64,14 +64,14 @@ function mount_and_start_immich_overlayfs() {
     #     echo "immich container is running, stop it"
     #     docker stop ${DOCKER_CONTAINER_IMMICH_NAME}
     #     sleep 5s
-    #     docker compose -f ${DOCKER_CONTAINER_YML_FILE} down 
+    #     docker compose -f ${DOCKER_CONTAINER_YML_FILE} down
 
     #     local cnt=0
     #     while ((cnt <= 10)); do
     #         if docker ps | grep ${DOCKER_CONTAINER_IMMICH_NAME}; then
     #             echo "loop to stop immich container, cnt ${cnt}"
     #             docker stop ${DOCKER_CONTAINER_IMMICH_NAME}
-    #             sleep 5s 
+    #             sleep 5s
     #             docker compose -f ${DOCKER_CONTAINER_YML_FILE} down
     #         else
     #             break
@@ -88,7 +88,7 @@ function mount_and_start_immich_overlayfs() {
 
     if docker ps | grep ${DOCKER_CONTAINER_IMMICH_NAME}; then
         echo "immich container is running, can't stop it"
-        return 1        
+        return 1
     fi
 
     if ! mountpoint -q ${OVERLAYFS_MERGED}; then
@@ -106,7 +106,7 @@ function mount_and_start_immich_overlayfs() {
         echo "immich container is not running"
         return 1
     fi
-    
+
 }
 
 function chk_docker_status() {
@@ -126,9 +126,13 @@ function chk_docker_status() {
     return 1
 }
 
-if chk_docker_status && chk_master_nas_nfs_mount; then
-    mount_and_start_immich_overlayfs
-else
-    echo "=== pong pong"
-fi
+function main() {
+    if chk_docker_status && chk_master_nas_nfs_mount; then
+        mount_and_start_immich_overlayfs
+    else
+        echo "=== pong pong"
+    fi
+}
+
+main &
 
