@@ -26,6 +26,15 @@ function chk_master_nas_nfs_mount() {
     return 1
 }
 
+function mv_files_from_merged_dir_to_upper_dir() {
+    #TODO refactor later
+    echo "SIMPLY Move merged files to upper"
+    if cp -a ${OVERLAYFS_MERGED:?}/* ${OVERLAYFS_UPPER:?}; then
+        # rm -rf ${OVERLAYFS_MERGED}/*
+        rm -rf "${OVERLAYFS_MERGED:?}/"*
+    fi
+}
+
 function compose_up_immich_container() {
     local cnt=0
     while ((cnt <= 10)); do
@@ -60,27 +69,6 @@ function compose_down_immich_container() {
 
 function mount_and_start_immich_overlayfs() {
     echo "Start mount immich overlayfs"
-    # if docker ps | grep ${DOCKER_CONTAINER_IMMICH_NAME}; then
-    #     echo "immich container is running, stop it"
-    #     docker stop ${DOCKER_CONTAINER_IMMICH_NAME}
-    #     sleep 5s
-    #     docker compose -f ${DOCKER_CONTAINER_YML_FILE} down
-
-    #     local cnt=0
-    #     while ((cnt <= 10)); do
-    #         if docker ps | grep ${DOCKER_CONTAINER_IMMICH_NAME}; then
-    #             echo "loop to stop immich container, cnt ${cnt}"
-    #             docker stop ${DOCKER_CONTAINER_IMMICH_NAME}
-    #             sleep 5s
-    #             docker compose -f ${DOCKER_CONTAINER_YML_FILE} down
-    #         else
-    #             break
-    #         fi
-    #         ((cnt++)) || true
-    #         sleep 5s
-    #     done
-    # fi
-
     if ! compose_down_immich_container; then
         echo "immich container is not stopped, can't stop it"
         return 1
@@ -94,8 +82,10 @@ function mount_and_start_immich_overlayfs() {
     if ! mountpoint -q ${OVERLAYFS_MERGED}; then
         echo "Mount immich overlayfs"
         mkdir -p ${OVERLAYFS_LOWER} ${OVERLAYFS_UPPER} ${OVERLAYFS_MERGED} ${OVERLAYFS_WORK}
-        mount -t overlay overlay -o redirect_dir=on,nfs_export=on,index=on,lowerdir=${OVERLAYFS_LOWER},upperdir=${OVERLAYFS_UPPER},workdir=${OVERLAYFS_WORK} ${OVERLAYFS_MERGED}
-        # mount -t overlay overlay -o lowerdir=${OVERLAYFS_LOWER},upperdir=${OVERLAYFS_UPPER},workdir=${OVERLAYFS_WORK} ${OVERLAYFS_MERGED}
+        if ! mount -t overlay overlay -o redirect_dir=on,nfs_export=on,index=on,lowerdir=${OVERLAYFS_LOWER},upperdir=${OVERLAYFS_UPPER},workdir=${OVERLAYFS_WORK} ${OVERLAYFS_MERGED}; then
+            echo "Mount immich overlayfs failed"
+            return 1
+        fi
     fi
 
     echo "now start immich container"
@@ -127,11 +117,24 @@ function chk_docker_status() {
 }
 
 function main() {
-    if chk_docker_status && chk_master_nas_nfs_mount; then
-        mount_and_start_immich_overlayfs
-    else
-        echo "=== pong pong"
+    if ! chk_docker_status; then
+        echo "Docker is not running"
+        return 1
     fi
+
+    if ! compose_down_immich_container; then
+        echo "can't stop immich server, ignore next setps"
+        return 1
+    fi
+
+    if ! chk_master_nas_nfs_mount; then
+        echo "Master nas path is not mounted, start immich directly"
+        compose_up_immich_container
+    else
+        mv_files_from_merged_dir_to_upper_dir
+        mount_and_start_immich_overlayfs
+    fi
+
 }
 
 main &
